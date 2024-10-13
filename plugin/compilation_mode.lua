@@ -69,9 +69,9 @@ NextError = nil
 
 PrevError = nil
 
-vim.keymap.set({"n", "t"}, "<F5>", Recompile)
-vim.keymap.set({"n","t"}, "<Space><F5>", Compile)
-vim.keymap.set("n", "<space>w", CompilationBuffer)
+-- vim.keymap.set({"n", "t"}, "<F5>", Recompile)
+-- vim.keymap.set({"n","t"}, "<Space><F5>", Compile)
+-- vim.keymap.set("n", "<space>w", CompilationBuffer)
 
 -- vim.api.nvim_create_user_command("Compile", , {})
 -- vim.api.nvim_create_user_command("Recompile", , {})
