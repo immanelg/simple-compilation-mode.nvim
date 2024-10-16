@@ -1,4 +1,5 @@
 # Simple Compilation Mode for Neovim
+![image](https://github.com/user-attachments/assets/6e5996b0-67fe-4ff9-adbd-837cc9798553)
 
 This plugin lets you create a terminal buffer and repeatedly run a compilation command in it, like in Emacs Compilation Mode.
 
