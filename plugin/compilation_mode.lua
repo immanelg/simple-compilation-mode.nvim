@@ -84,9 +84,8 @@ local maybe_init_buffer = function()
     chan = vim.bo.channel
     buffer = vim.api.nvim_get_current_buf()
     vim.keymap.set("n", "q", "<cmd>bd!<cr>", { buffer = buffer })
-    vim.keymap.set("n", "<C-c>", function() ctrl_c() end, { buffer = buffer })
-    -- BUG: this assumes that the process will terminate before we send our 'clear; compile-command'
-    vim.keymap.set("n", "r", function() ctrl_c() vim.schedule(CompileAgain) end, { buffer = buffer }) 
+    vim.keymap.set("n", "<C-c>", ctrl_c, { buffer = buffer })
+    vim.keymap.set("n", "r", CompileAgain, { buffer = buffer }) 
     -- vim.keymap.set("n", "<Cr>", function() vim.api.nvim_feedkeys("^gF", "i", true) end, { buffer = buffer })
     vim.keymap.set("n", "<Cr>", function() jump_under_cursor() end, { buffer = buffer })
 end
@@ -117,7 +116,9 @@ local ask_compile_command = function(after)
     end)
 end
 
--- BUG: this doesn't work if the compile command has already terminated.
+-- BUG: This doesn't interrupt the running compilation process.
+-- And there's no reliable way to do it other than pressing Ctrl-C with nvim_feedkeys()
+-- and hoping that the process won't be slow to terminate.
 CompileAgain = function() 
     if not compile_command then
         ask_compile_command(compile)
