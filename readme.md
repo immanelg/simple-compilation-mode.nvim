@@ -1,13 +1,11 @@
 # Simple Compilation Mode for Neovim
 
-Work in progress, don't rely on it.
-
 This plugin lets you create a terminal buffer and repeatedly run a compilation command in it, like in Emacs Compilation Mode.
 
 ```lua
 vim.keymap.set({"n","t"}, "<Space><F5>", Compile) -- set compilation command and compile
 vim.keymap.set({"n","t"}, "<F5>", CompileAgain) -- recompile with previous command if it's set; otherwise set the command and compile
-vim.keymap.set("n", "<space>w", CompileBuffer) -- open compilation buffer
+vim.keymap.set("n", "gw", CompileBuffer) -- open compilation buffer
 ```
 Compilation buffer is a neovim `:terminal`, which is cleared before each run.
 
