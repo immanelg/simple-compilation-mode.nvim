@@ -109,7 +109,11 @@ local compile = function()
 end
 
 local ask_compile_command = function(after) 
-    vim.ui.input({prompt = 'compile command: ', default = compile_command or "make"}, function(input)
+    vim.ui.input({
+        prompt = 'compile command: ',
+        default = compile_command or "make",
+        completion = "shellcmd",
+    }, function(input)
         if not input then return end
         compile_command = input
         after()
