@@ -49,9 +49,12 @@ It doesn't use a real terminal which is a tradeoff. It:
 * Runs commands in non-interactive shell.
 * Can't receive interactive input, etc.
 * Can't let you run ad-hoc commands with immediate parsing of locations.
+
 But our plugin:
 * Can't know when a program have finished executing
 * Can't reliably clear the terminal
+
+Our plugin is tiny.
 
 ### LSP
 Real programmers don't use LSP.
