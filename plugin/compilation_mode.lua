@@ -207,11 +207,22 @@ local function ensure_buffer_init()
     vim.keymap.set("n", "r",        compile_again,        { buffer = buffer }) 
     vim.keymap.set("n", "<cr>",     jump_under_cursor,    { buffer = buffer })
     vim.keymap.set("n", "<space>k", preview_under_cursor, { buffer = buffer })
+    -- TODO: explore...
+    -- local win = vim.api.nvim_get_current_win()
+    -- vim.api.nvim_win_set_buf(win, buffer)
+    -- vim.wo[win].winfixheight = true
+    -- vim.wo[win].winfixbuf = true
+    -- vim.wo[win].number = false
+    -- vim.wo[win].relativenumber = false
+    -- vim.wo[win].signcolumn = "no"
+    -- vim.wo[win].wrap = false
 end
 
 local function start_compilation()
     assert(compile_command)
     ensure_buffer_init()
+    locations = {}
+    current_row_in_buffer = 0
     vim.cmd.startinsert()
     vim.api.nvim_chan_send(chan, "clear\r")
     -- vim.api.nvim_chan_send(chan, compile_command.."&& echo Compilation finished!".."\r")
