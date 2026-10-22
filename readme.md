@@ -34,3 +34,25 @@ r        compile again
 <c-c>    interrupt compilation
 q        close buffer
 ```
+
+## Comparisons
+### `:make`
+* Doesn't use a real terminal.
+* Execution blocks UI.
+* Command has to be set with `set makeprg..`.
+
+### [ej-shafran/compile-mode.nvim](https://github.com/ej-shafran/compile-mode.nvim) (and Emacs)
+Great plugin. This plugin is inspired by it.
+
+It doesn't use a real terminal which is a tradeoff. It:
+* Reimplements ANSI parsing
+* Runs commands in non-interactive shell.
+* Can't receive interactive input, etc.
+* Can't let you run ad-hoc commands with immediate parsing of locations.
+But our plugin:
+* Can't know when a program have finished executing
+* Can't reliably clear the terminal
+
+### LSP
+Real programmers don't use LSP.
+
