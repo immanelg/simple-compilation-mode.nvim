@@ -159,6 +159,9 @@ local function jump_last()
     current_row_in_buffer = loc.row_in_buffer
     jump(loc)
 end
+-- go to next error without jumping. or maybe jump_next(false)
+local function next() end
+local function prev() end
 
 local function switch_to_buffer() 
     if not vim.api.nvim_buf_is_valid(buffer) then
@@ -253,7 +256,8 @@ end
 
 -- BUG: This doesn't interrupt the running compilation process.
 -- And there's no reliable way to do it other than pressing Ctrl-C with nvim_feedkeys()
--- and hoping that the process won't be slow to terminate.
+-- and hoping that the process will terminate fast enough for us to 
+-- have time to send enter a command again.
 compile_again = function()
     if compile_command
     then start_compilation() 
