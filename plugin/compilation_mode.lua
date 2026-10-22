@@ -242,7 +242,7 @@ local function ask_compile_command(after)
     vim.ui.input({
         prompt = 'command: ',
         default = compile_command or "rg --vimgrep ",
-        completion = "shellcmd",
+        completion = "shellcmdline",
     }, function(input)
         if not input then return end
         compile_command = input
