@@ -3,98 +3,218 @@ local compile_command = nil
 local buffer = nil
 local chan = nil
 
-local current_line = 1
+local current_row_in_buffer = 0
 
--- -- this won't work because we need to call it after the compilation process exits, and we can't know when (without hacks?)
--- local locations = {}
--- local set_locations = function()
---     locations = {}
---     for i, line in ipairs(vim.api.nvim_buf_get_lines(buffer, 0, -1, false)) do
---         print(i, line)
---         local file, line, col, rest = line:match("^([%w_-%.]*):(%d+):(%d+):(.-)$")
---         if file and line and col then
---             table.insert(locations, {
---                 file = file,
---                 line = tonumber(line),
---                 column = tonumber(col),
---                 -- error = rest,
---             })
---             print("parsed", "file="..file, "line="..line, "col="..col)
---         end
---     end
---     print(vim.inspect(locations))
--- end
+local locations = {}
 
-local hl_ns = vim.api.nvim_create_namespace("CompileHighlight")
-vim.api.nvim_set_hl(hl_ns, "CompileLoc", { bg = "#404040", bold = true })
-vim.api.nvim_set_hl_ns(hl_ns) 
+local FILE, ROW, COLUMN, CONTENT = "file", "row", "column", "content"
+matchers = {
+    unix = {
+        regex  = "^(.-):(%d+):?(%d*):?(.*)$",
+        fields = {FILE, ROW,  COLUMN, CONTENT}
+    },
+    jai = {
+        regex  = "^(.-):(%d+),(%d*):(.*)$",
+        fields = {FILE, ROW,  COLUMN, CONTENT}
+    },
+}
 
-local line_match_loc = function(line) 
-    return line:match("^([%w/_-%.]*):(%d+):(%d+):(.-)$")
-end
-
-local jump_under_cursor = function()
-    local loc = nil
-
-    local buffer_lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
-
-    local i = vim.api.nvim_win_get_cursor(0)[1] -- nvim_win_get_cursor() is (1,0)-indexed
-    -- local j = 0
-    repeat
-        local buffer_line = buffer_lines[i]
-        if bufferline ~= "" then 
-            local file, line, col, rest = line_match_loc(buffer_line)
-            if file and line and col then
-                loc = {file = file, line = tonumber(line), column = tonumber(col)}
-                -- j = buffer_line:find(col)
-                break
+local function parse_line(row_in_buffer, line_string) 
+    for _, matcher in pairs(matchers) do
+        local groups = { line_string:match(matcher.regex) }
+        if #groups > 0 then
+            local loc = {}
+            for j, field in ipairs(matcher.fields) do
+                local value = groups[j] if value then
+                    loc[field] = value
+                end
+            end
+            if loc.file then
+                loc.row_in_buffer = row_in_buffer
+                loc.row = tonumber(loc.row)
+                loc.column = tonumber(loc.column or 1)
+                return loc
             end
         end
-        i = i - 1
-    until i == 0
-
-    if loc ~= nil then
-        vim.api.nvim_buf_clear_namespace(buffer, hl_ns, 0, -1)
-        vim.api.nvim_buf_add_highlight(buffer, hl_ns, "CompileLoc", i-1 --[[0-indexed]], 0, -1)
-
-        vim.cmd("edit "..loc.file)
-    else
-        print("no error here or above")
     end
+    return nil
 end
 
-local switch_to_buffer = function() 
+local function open_popup(row, column, lines, ft)
+    local popup_buffer = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(popup_buffer, 0, -1, false, lines)
+
+    local win = vim.api.nvim_open_win(popup_buffer, false, {
+        relative = "editor",
+        width = vim.o.columns,
+        height = 3,
+        row = row,
+        col = column,
+        style = "minimal",
+        border = "rounded",
+    })
+    vim.bo[popup_buffer].filetype = ft
+    vim.bo[popup_buffer].bufhidden = "wipe"
+    -- vim.bo[popup_buffer].modifiable = false
+
+    if ft then
+        local lang = vim.treesitter.language.get_lang(ft) or ft
+        pcall(vim.treesitter.start, popup_buffer, lang)
+    end
+
+    vim.keymap.set("n", "q", function() vim.api.nvim_win_close(win, true) end, { buffer = popup_buffer })
+    vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+      once = true,
+      callback = function()
+        if vim.api.nvim_win_is_valid(win) then
+          vim.api.nvim_win_close(win, true)
+        end
+      end,
+    })
+end
+
+local hl_ns = vim.api.nvim_create_namespace("CompileHighlight")
+-- vim.api.nvim_set_hl(0, "CompileLoc", { bg = "#aaffff", fg = "#333333", bold = true })
+vim.api.nvim_set_hl(0, "CompileLoc", { link = "QuickFixLine" })
+
+local function jump(loc)
+    vim.api.nvim_buf_clear_namespace(buffer, hl_ns, 0, -1)
+    vim.api.nvim_buf_set_extmark(
+        buffer, hl_ns, loc.row_in_buffer-1 --[[convert to 0 indexed]], 0,
+        {
+        end_row = loc.row_in_buffer-1,
+        strict = false, end_col = -1,
+        hl_group = "CompileLoc",
+        })
+    vim.cmd("edit "..loc.file)
+    vim.api.nvim_win_set_cursor(0, { loc.row or 1, math.max((loc.column or 1) - 1, 0) })
+end
+
+
+local function preview_under_cursor()
+    local row = vim.api.nvim_win_get_cursor(0)[1]
+    for i = #locations, 1, -1 do
+        local loc = locations[i]
+        if loc.row_in_buffer <= row then
+            -- open file under cursor, feed it into popup
+            local buf = vim.fn.bufadd(loc.file)
+            vim.fn.bufload(buf)
+            local lines = {}
+            for r = math.max(loc.row - 1, 1), loc.row + 1 do
+                local text = vim.api.nvim_buf_get_lines(buf, r - 1, r, false)[1]
+                if text then table.insert(lines, string.format("%5d %s", r, text)) end
+            end
+            open_popup(loc.row_in_buffer, 0, lines, vim.filetype.match({ buf = buf }))
+            return
+        end
+    end
+
+end
+
+local function jump_under_cursor()
+    local row = vim.api.nvim_win_get_cursor(0)[1] -- NOTE: nvim_win_get_cursor() is (1,0)-indexed
+
+    for i = #locations, 1, -1 do
+        local loc = locations[i]
+        if loc.row_in_buffer <= row then
+            jump(loc)
+            current_row_in_buffer = row
+            return
+        end
+    end
+
+    print("no error on this line or above. to add pattern, edit CompileMode.matchers")
+end
+
+local function jump_next()
+    for i = 1, #locations, 1 do
+        local loc = locations[i]
+        if loc.row_in_buffer > current_row_in_buffer then
+            current_row_in_buffer = loc.row_in_buffer
+            jump(loc)
+            return
+        end
+    end
+    print("hit end")
+end
+
+local function jump_prev()
+    for i = #locations, 1, -1 do
+        local loc = locations[i]
+        if loc.row_in_buffer < current_row_in_buffer then
+            current_row_in_buffer = loc.row_in_buffer
+            jump(loc)
+            return
+        end
+    end
+    print("hit start")
+end
+local function jump_first()
+    local loc = locations[1]
+    current_row_in_buffer = loc.row_in_buffer
+    jump(loc)
+end
+local function jump_last()
+    local loc = locations[#locations]
+    current_row_in_buffer = loc.row_in_buffer
+    jump(loc)
+end
+
+local function switch_to_buffer() 
     if not vim.api.nvim_buf_is_valid(buffer) then
         print("no compilation buffer")
-    else 
+    else
         vim.api.nvim_win_set_buf(0, buffer)
     end
 end
 
-local ctrl_c = function() 
+local function interrupt_command()
     vim.cmd.startinsert()
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-c>", true, false, true), "i", true)
 end
 
-local maybe_init_buffer = function()
-    if buffer and vim.api.nvim_buf_is_valid(buffer) then
+local function buffer_update_hook(lines)
+    locations = {}
+    for i, line in ipairs(lines) do
+        local location = parse_line(i, line)
+        if location and location.file then 
+            table.insert(locations, location)
+       end
+    end
+end
+
+local compile_again -- fw declare for ensure_buffer_init
+
+local function ensure_buffer_init()
+    if buffer and vim.api.nvim_buf_is_valid(buffer) 
+    then
         return
     end
     vim.cmd "term"
     chan = vim.bo.channel
     buffer = vim.api.nvim_get_current_buf()
-    vim.keymap.set("n", "q", "<cmd>bd!<cr>", { buffer = buffer })
-    vim.keymap.set("n", "<C-c>", ctrl_c, { buffer = buffer })
-    vim.keymap.set("n", "r", CompileAgain, { buffer = buffer }) 
-    -- vim.keymap.set("n", "<Cr>", function() vim.api.nvim_feedkeys("^gF", "i", true) end, { buffer = buffer })
-    vim.keymap.set("n", "<Cr>", function() jump_under_cursor() end, { buffer = buffer })
+    vim.api.nvim_buf_set_name(buffer, "compilation-term")
+    vim.api.nvim_buf_attach(buffer, false, {
+        on_lines = function(_, bufnr, changedtick, firstline, lastline, new_lastline, old_byte_size)
+            vim.schedule(function()
+                local lines = vim.api.nvim_buf_get_lines(bufnr, 0, lastline, false)
+                buffer_update_hook(lines)
+            end)
+        end,
+    })
+    vim.keymap.set("n", "q",        "<cmd>bd!<cr>",       { buffer = buffer })
+    vim.keymap.set("n", "<c-c>",    interrupt_command,    { buffer = buffer })
+    vim.keymap.set("n", "r",        compile_again,        { buffer = buffer }) 
+    vim.keymap.set("n", "<cr>",     jump_under_cursor,    { buffer = buffer })
+    vim.keymap.set("n", "<space>k", preview_under_cursor, { buffer = buffer })
 end
 
-local compile = function()
+local function start_compilation()
     assert(compile_command)
-    maybe_init_buffer()
+    ensure_buffer_init()
     vim.cmd.startinsert()
     vim.api.nvim_chan_send(chan, "clear\r")
+    -- vim.api.nvim_chan_send(chan, compile_command.."&& echo Compilation finished!".."\r")
     vim.api.nvim_chan_send(chan, compile_command.."\r")
     switch_to_buffer()
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-\\><C-n>", true, false, true), "i", true)
@@ -102,16 +222,12 @@ local compile = function()
         vim.api.nvim_win_set_cursor(0, {3, 0})
     end)
     vim.api.nvim_buf_clear_namespace(buffer, hl_ns, 0, -1)
-
-    -- vim.defer_fn(function() 
-    --     set_locations()
-    -- end, 1000)
 end
 
-local ask_compile_command = function(after) 
+local function ask_compile_command(after) 
     vim.ui.input({
-        prompt = 'compile command: ',
-        default = compile_command or "make",
+        prompt = 'command: ',
+        default = compile_command or "rg --vimgrep ",
         completion = "shellcmd",
     }, function(input)
         if not input then return end
@@ -120,28 +236,29 @@ local ask_compile_command = function(after)
     end)
 end
 
+local function compile() 
+    ask_compile_command(start_compilation)
+end
+
 -- BUG: This doesn't interrupt the running compilation process.
 -- And there's no reliable way to do it other than pressing Ctrl-C with nvim_feedkeys()
 -- and hoping that the process won't be slow to terminate.
-CompileAgain = function() 
-    if not compile_command then
-        ask_compile_command(compile)
-    else
-        compile()
+compile_again = function()
+    if compile_command
+    then start_compilation() 
+    else ask_compile_command(start_compilation)
     end
 end
 
-Compile = function() 
-    ask_compile_command(compile)
-end
-
-CompileBuffer = function()
-    switch_to_buffer()
-end
-
-NextError = nil
-
-PrevError = nil
+CompileMode = {
+    compile = compile,
+    compile_again = compile_again,
+    switch_to_buffer = switch_to_buffer,
+    jump_next = jump_next,
+    jump_prev = jump_prev,
+    jump_first = jump_first,
+    jump_last = jump_last,
+}
 
 -- vim.keymap.set({"n", "t"}, "<F5>", CompileAgain)
 -- vim.keymap.set({"n","t"}, "<Space><F5>", Compile)
