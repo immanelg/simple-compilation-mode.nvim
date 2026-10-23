@@ -11,6 +11,8 @@ all:
 	@echo ""
 	grep -n -H --color=always 'interactive terminal' readme.md
 	grep -n -H --color=always 'compile_again' readme.md
+	grep -n -H --color=always 'compile_again' readme.md
+	grep -n -H --color=always -r 'nvim_set_hl' plugin/
 	@echo ""
 	@echo "Or some other keys:"
 	@echo " <space>k to show floating preview"
