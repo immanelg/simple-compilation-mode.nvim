@@ -3,6 +3,8 @@
 
 This plugin lets you create an interactive terminal buffer and repeatedly run a command in it.
 
+This is similar to Emacs compile-mode, `:make`/quickfix, Kakoune jump, etc.
+
 ## Usage
 ```lua
 vim.pack.add({ "https://github.com/immanelg/simple-compilation-mode.nvim" })
@@ -15,8 +17,8 @@ vim.keymap.set({"n","t"}, "gs", function() CompileMode.compile_again() end)
 vim.keymap.set({"n","t"}, "gS", function() CompileMode.compile() end)
 
 -- jump between errors
-vim.keymap.set({"n","t"}, "<A-j>", function() CompileMode.jump_next() end)
-vim.keymap.set({"n","t"}, "<A-k>", function() CompileMode.jump_prev() end)
+vim.keymap.set({"n","t"}, "<C-j>", function() CompileMode.jump_next() end)
+vim.keymap.set({"n","t"}, "<C-k>", function() CompileMode.jump_prev() end)
 vim.keymap.set({"n","t"}, "gzg", function() CompileMode.jump_first() end)
 vim.keymap.set({"n","t"}, "gzG", function() CompileMode.jump_last() end)
 
