@@ -9,18 +9,20 @@ local locations = {}
 
 local FILE, ROW, COLUMN, CONTENT = "file", "row", "column", "content"
 matchers = {
-    unix = {
-        regex  = "^(.-):(%d+):?(%d*):?(.*)$",
+    {
+        name = "jai",
+        regex  = "^(.-):(%d+),(%d*):(.*)$",
         fields = {FILE, ROW,  COLUMN, CONTENT}
     },
-    jai = {
-        regex  = "^(.-):(%d+),(%d*):(.*)$",
+    {
+        name = "unix",
+        regex  = "^(.-):(%d+):(%d*):?(.*)$",
         fields = {FILE, ROW,  COLUMN, CONTENT}
     },
 }
 
 local function parse_line(row_in_buffer, line_string) 
-    for _, matcher in pairs(matchers) do
+    for _, matcher in ipairs(matchers) do
         local groups = { line_string:match(matcher.regex) }
         if #groups > 0 then
             local loc = {}
@@ -190,6 +192,18 @@ local function buffer_update_hook(lines)
                 strict = false, end_col = -1,
                 hl_group = "CompileLine",
             })
+            -- local pos = 1
+            -- for _, field in ipairs({ FILE, ROW, COLUMN, CONTENT }) do
+            --     local value = tostring(loc[field] or "")
+            --     local s, e = line:find(value, pos, true)
+            --     if s and value ~= "" then
+            --         vim.api.nvim_buf_set_extmark(buffer, hl_ns, i - 1, s - 1, {
+            --             end_col = e,
+            --             hl_group = field_hl[field],
+            --         })
+            --         pos = e + 1
+            --     end
+            -- end
        end
 
     end
