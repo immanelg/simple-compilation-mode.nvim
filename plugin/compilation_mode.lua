@@ -74,24 +74,6 @@ local hl_ns = vim.api.nvim_create_namespace("CompileHighlight")
 vim.api.nvim_set_hl(0, "CompileCurrentLine", { link = "QuickFixLine", underline = true })
 vim.api.nvim_set_hl(0, "CompileLine", { bold = true })
 
-local mark_current_line
-local function jump(loc)
-    if mark_current_line then vim.api.nvim_buf_del_extmark(buffer, hl_ns, mark_current_line) end
-    mark_current_line = vim.api.nvim_buf_set_extmark(buffer, hl_ns, loc.row_in_buffer-1 --[[convert to 0 indexed]], 0, {
-        end_row = loc.row_in_buffer-1,
-        strict = false, end_col = -1,
-        hl_group = "CompileCurrentLine",
-    })
-
-    if vim.fn.filereadable(loc.file) ~= 0 then
-        vim.cmd("edit "..loc.file)
-        vim.api.nvim_win_set_cursor(0, { loc.row or 1, math.max((loc.column or 1) - 1, 0) })
-    else
-        vim.notify("file not readable")
-    end
-end
-
-
 local function preview_under_cursor()
     local row = vim.api.nvim_win_get_cursor(0)[1]
     for i = #locations, 1, -1 do
@@ -112,6 +94,25 @@ local function preview_under_cursor()
         end
     end
 end
+
+local mark_current_line
+local function jump(loc)
+    if mark_current_line then vim.api.nvim_buf_del_extmark(buffer, hl_ns, mark_current_line) end
+    mark_current_line = vim.api.nvim_buf_set_extmark(buffer, hl_ns, loc.row_in_buffer-1 --[[convert to 0 indexed]], 0, {
+        end_row = loc.row_in_buffer-1,
+        strict = false, end_col = -1,
+        hl_group = "CompileCurrentLine",
+    })
+
+    if vim.fn.filereadable(loc.file) ~= 0 then
+        vim.cmd("edit "..loc.file)
+        vim.api.nvim_win_set_cursor(0, { loc.row or 1, math.max((loc.column or 1) - 1, 0) })
+    else
+        vim.notify("file not readable")
+    end
+end
+
+
 
 local function jump_under_cursor()
     local row = vim.api.nvim_win_get_cursor(0)[1] -- NOTE: nvim_win_get_cursor() is (1,0)-indexed
@@ -180,12 +181,12 @@ end
 
 local function buffer_update_hook(lines)
     locations = {}
-    for i, line in ipairs(lines) do
-        local loc = parse_line(i, line)
+    for row_in_buffer, line in ipairs(lines) do
+        local loc = parse_line(row_in_buffer, line)
         if loc and loc.file then 
             table.insert(locations, loc)
-            vim.api.nvim_buf_set_extmark(buffer, hl_ns, loc.row-1, 0, {
-                end_row = loc.row-1,
+            vim.api.nvim_buf_set_extmark(buffer, hl_ns, loc.row_in_buffer-1, 0, {
+                end_row = loc.row_in_buffer-1,
                 strict = false, end_col = -1,
                 hl_group = "CompileLine",
             })
