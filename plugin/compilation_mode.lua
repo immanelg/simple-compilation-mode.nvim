@@ -7,17 +7,17 @@ local current_row_in_buffer = 0
 
 local locations = {}
 
-local FILE, ROW, COLUMN, CONTENT = "file", "row", "column", "content"
 matchers = {
+    -- number-indexed for deterministic looping order btw
     {
-        name = "jai",
+        -- jai
         regex  = "^(.-):(%d+),(%d*):(.*)$",
-        fields = {FILE, ROW,  COLUMN, CONTENT}
+        loc = { file = 1, row = 2, column = 3, content = 4 }
     },
     {
-        name = "unix",
+        -- unix
         regex  = "^(.-):(%d+):(%d*):?(.*)$",
-        fields = {FILE, ROW,  COLUMN, CONTENT}
+        loc = { file = 1, row = 2, column = 3, content = 4 },
     },
 }
 
@@ -26,10 +26,8 @@ local function parse_line(row_in_buffer, line_string)
         local groups = { line_string:match(matcher.regex) }
         if #groups > 0 then
             local loc = {}
-            for j, field in ipairs(matcher.fields) do
-                local value = groups[j] if value then
-                    loc[field] = value
-                end
+            for field, idx in pairs(matcher.loc) do
+                loc[field] = groups[idx]
             end
             if loc.file then
                 loc.row_in_buffer = row_in_buffer
