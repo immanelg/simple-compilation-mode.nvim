@@ -9,24 +9,26 @@ local locations = {}
 
 matchers = {
     -- number-indexed for deterministic looping order btw
-    {
-        -- jai
-        regex  = "^(.-):(%d+),(%d*):(.*)$",
-        loc = { file = 1, row = 2, column = 3, content = 4 }
+    { -- jai
+        "^(.-):(%d+),(%d*):(.*)$",
+        { file = 1, row = 2, column = 3, content = 4 }
     },
-    {
-        -- unix
-        regex  = "^(.-):(%d+):(%d*):?(.*)$",
-        loc = { file = 1, row = 2, column = 3, content = 4 },
+    { -- unix
+        "^(.-):(%d+):(%d*):?(.*)$",
+        { file = 1, row = 2, column = 3, content = 4 },
+    },
+    { -- odin
+        [[^(.-)%((%d+):(%d+)%) (.*)$]],
+        { file = 1, row = 2, column = 3, content = 4 }
     },
 }
 
 local function parse_line(row_in_buffer, line_string) 
     for _, matcher in ipairs(matchers) do
-        local groups = { line_string:match(matcher.regex) }
+        local groups = { line_string:match(matcher[1]) }
         if #groups > 0 then
             local loc = {}
-            for field, idx in pairs(matcher.loc) do
+            for field, idx in pairs(matcher[2]) do
                 loc[field] = groups[idx]
             end
             if loc.file then
@@ -179,6 +181,7 @@ local function interrupt_command()
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-c>", true, false, true), "i", true)
 end
 
+
 local function buffer_update_hook(lines)
     locations = {}
     for row_in_buffer, line in ipairs(lines) do
@@ -207,6 +210,15 @@ local function buffer_update_hook(lines)
     end
 end
 
+local function debounce(f, ms)
+    local timer = vim.uv.new_timer()
+    return function(...)
+        timer:stop()
+        local args = {...}
+        timer:start(ms, 0, vim.schedule_wrap(function() f(unpack(args)) end))
+    end
+end
+
 local compile_again -- fw declare for ensure_buffer_init
 
 local function ensure_buffer_init()
@@ -219,11 +231,14 @@ local function ensure_buffer_init()
     buffer = vim.api.nvim_get_current_buf()
     vim.api.nvim_buf_set_name(buffer, "compilation-term")
     vim.api.nvim_buf_attach(buffer, false, {
-        on_lines = function(_, bufnr, changedtick, firstline, lastline, new_lastline, old_byte_size)
-            vim.schedule(function()
-                local lines = vim.api.nvim_buf_get_lines(bufnr, 0, lastline, false)
-                buffer_update_hook(lines)
-            end)
+        on_lines = debounce(function(_, bufnr, changedtick, firstline, lastline, new_lastline, old_byte_size)
+            if not vim.api.nvim_buf_is_valid(bufnr) then return end
+            local lines = vim.api.nvim_buf_get_lines(bufnr, 0, lastline, false)
+            buffer_update_hook(lines)
+        end, 300),
+        on_detach = function(_, bufnr)
+            buffer = nil
+            chan = nil
         end,
     })
     vim.keymap.set("n", "q",        "<cmd>bd!<cr>",       { buffer = buffer })
@@ -259,12 +274,20 @@ local function start_compilation()
     end)
 end
 
+-- local instances = {}
+-- local function create(o)
+--     instances[o.instance] = {
+--         o.command = o.command,
+--         current_row_in_buffer = 0,
+--     }
+-- end
+
 local ft_to_default_command
 local function default_command()
     ft_to_default_command = ft_to_default_command or {
         jai = "jai first.jai ",
         rust = "cargo build ",
-        go = "go vet . ",
+        go = "go build . ",
         make = "make ",
         c = "make ",
         cpp = "make ",
@@ -274,9 +297,10 @@ local function default_command()
         lua = "lua %",
         javascript = "npm run build ",
         typescript = "npm run build ",
+        html = "npm run build ",
         odin = "odin build . ",
     }
-    return ft_to_default_command[vim.bo.filetype] or "rg --vimgrep "
+    return ft_to_default_command[vim.bo.filetype] or "grep -rn "
 end
 local function ask_compile_command(after) 
     vim.ui.input({
